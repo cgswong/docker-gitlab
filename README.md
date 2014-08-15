@@ -42,8 +42,8 @@
 - [Upgrading](#upgrading)
 - [Rake Tasks](#rake-tasks)
 - Links
-  - [Announcements](https://github.com/sameersbn/docker-gitlab/issues/39)
-  - [Issues](https://github.com/sameersbn/docker-gitlab/issues)
+  - [Announcements](https://github.com/cgwong/docker-gitlab/issues/39)
+  - [Issues](https://github.com/cgwong/docker-gitlab/issues)
 - [References](#references)
 
 # Introduction
@@ -56,7 +56,7 @@ Current Version: 7.0.0
 
 ## CPU
 - 1 core works for under 100 users but the responsiveness might suffer
-- 2 cores is the recommended number of cores and supports up to 100 users
+- **2 cores** is the **recommended** number of cores and supports up to 100 users
 - 4 cores supports up to 1,000 users
 - 8 cores supports up to 10,000 users
 
@@ -93,19 +93,19 @@ If you have enough RAM memory and a recent CPU the speed of GitLab is mainly lim
 Pull the latest version of the image from the docker index. This is the recommended method of installation as it is easier to update image in the future. These builds are performed by the **Docker Trusted Build** service.
 
 ```bash
-docker pull sameersbn/gitlab:latest
+docker pull cgswong/docker-gitlab:latest
 ```
 
-Since version 6.3.0, the image builds are being tagged. You can now pull a particular version of gitlab by specifying the version number. For example,
+The image builds are being tagged so you can pull a particular version of gitlab by specifying the version number. For example,
 
 ```bash
-docker pull sameersbn/gitlab:7.0.0
+docker pull cgswong/docker-gitlab:7.0.0
 ```
 
 Alternately you can build the image yourself.
 
 ```bash
-git clone https://github.com/sameersbn/docker-gitlab.git
+git clone https://github.com/cgswong/docker-gitlab.git
 cd docker-gitlab
 docker build --tag="$USER/gitlab" .
 ```
@@ -117,7 +117,7 @@ Run the gitlab image
 docker run --name='gitlab' -i -t --rm \
 -p 10022:22 -p 10080:80 \
 -e "GITLAB_PORT=10080" -e "GITLAB_SSH_PORT=10022" \
-sameersbn/gitlab:7.0.0
+cgswong/docker-gitlab:latest
 ```
 
 __NOTE__: Please allow a couple of minutes for the GitLab application to start.
@@ -127,144 +127,45 @@ Point your browser to `http://localhost:10080` and login using the default usern
 * username: admin@local.host
 * password: 5iveL!fe
 
-You should now have the GitLab application up and ready for testing. If you want to use this image in production the please read on.
+You should now have the GitLab application up and ready for testing. If you want to use this image in production then please read on.
 
 # Configuration
 
 ## Data Store
 GitLab is a code hosting software and as such you don't want to lose your code when the docker container is stopped/deleted. To avoid losing any data, you should mount a volume at,
 
-* /home/git/data
+* /opt/git/data
 
 Volumes can be mounted in docker by specifying the **'-v'** option in the docker run command.
 
 ```bash
 mkdir /opt/gitlab/data
 docker run --name=gitlab -d \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0
+  -v /opt/gitlab/data:/opt/git/data \
+  cgswong/docker-gitlab:latest
 ```
 
 ## Database
 GitLab uses a database backend to store its data.
 
-### MySQL
+### Database Server
 
-#### Internal MySQL Server
+#### Internal PostgreSQL Server
 
-> **Warning**
->
-> The internal mysql server will soon be removed from the image.
+> To cut down on container size, or for a more scalable deployment 
+> please use a linked [postgresql](#linking-to-postgresql-container) container instead.
+> Or else connect with an external [postgresql](#external-postgresql-server) server.
 
-> Please use a linked [mysql](#linking-to-mysql-container) or
-> [postgresql](#linking-to-postgresql-container) container instead.
-> Or else connect with an external [mysql](#external-mysql-server) or
-> [postgresql](#external-postgresql-server) server.
-
-> You've been warned.
-
-This docker image is configured to use a MySQL database backend. The database connection can be configured using environment variables. If not specified, the image will start a mysql server internally and use it. However in this case, the data stored in the mysql database will be lost if the container is stopped/deleted. To avoid this you should mount a volume at /var/lib/mysql.
+This docker image is configured to use a PostgreSQL database backend. The database connection can be configured using environment variables. If not specified, the image will start a PostgreSQL server internally and use it.
 
 ```bash
-mkdir /opt/gitlab/mysql
+mkdir /opt/gitlab/postgresql
 docker run --name=gitlab -d \
-  -v /opt/gitlab/data:/home/git/data \
-  -v /opt/gitlab/mysql:/var/lib/mysql sameersbn/gitlab:7.0.0
+  -v /opt/gitlab/data:/opt/git/data \
+  -v /opt/gitlab/postgresql:/var/lib/postgresql cgswong/docker-gitlab:latest
 ```
 
 This will make sure that the data stored in the database is not lost when the image is stopped and started again.
-
-#### External MySQL Server
-The image can be configured to use an external MySQL database instead of starting a MySQL server internally. The database configuration should be specified using environment variables while starting the GitLab image.
-
-Before you start the GitLab image create user and database for gitlab.
-
-```sql
-CREATE USER 'gitlab'@'%.%.%.%' IDENTIFIED BY 'password';
-CREATE DATABASE IF NOT EXISTS `gitlabhq_production` DEFAULT CHARACTER SET `utf8` COLLATE `utf8_unicode_ci`;
-GRANT SELECT, LOCK TABLES, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `gitlabhq_production`.* TO 'gitlab'@'%.%.%.%';
-```
-
-To make sure the database is initialized start the container with **app:rake gitlab:setup** option.
-
-*Assuming that the mysql server host is 192.168.1.100*
-
-```bash
-docker run --name=gitlab -i -t --rm \
-  -e "DB_HOST=192.168.1.100" -e "DB_NAME=gitlabhq_production" -e "DB_USER=gitlab" -e "DB_PASS=password" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:setup
-```
-
-**NOTE: The above setup is performed only for the first run**.
-
-This will initialize the gitlab database. Now that the database is initialized, start the container normally.
-
-```bash
-docker run --name=gitlab -d \
-  -e "DB_HOST=192.168.1.100" -e "DB_NAME=gitlabhq_production" -e "DB_USER=gitlab" -e "DB_PASS=password" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0
-```
-
-#### Linking to MySQL Container
-You can link this image with a mysql container for the database requirements. The alias of the mysql server container should be set to **mysql** while linking with the gitlab image.
-
-If a mysql container is linked, only the DB_HOST and DB_PORT settings are automatically retrieved using the linkage. You may still need to set other database connection parameters such as the DB_NAME, DB_USER, DB_PASS and so on.
-
-To illustrate linking with a mysql container, we will use the [sameersbn/mysql](https://github.com/sameersbn/docker-mysql) image. When using docker-mysql in production you should mount a volume for the mysql data store. Please refer the [README](https://github.com/sameersbn/docker-mysql/blob/master/README.md) of docker-mysql for details.
-
-First, lets pull the mysql image from the docker index.
-```bash
-docker pull sameersbn/mysql:latest
-```
-
-For data persistence lets create a store for the mysql and start the container.
-```bash
-mkdir -p /opt/mysql/data
-docker run --name=mysql -d \
-	-v /opt/mysql/data:/var/lib/mysql \
-	sameersbn/mysql:latest
-```
-
-You should now have the mysql server running. By default the sameersbn/mysql image does not assign a password for the root user and allows remote connections for the root user from the 172.17.%.% address space. This means you can login to the mysql server from the host as the root user.
-
-Now, lets login to the mysql server and create a user and database for the GitLab application.
-
-```bash
-mysql -uroot -h $(docker inspect mysql | grep IPAddres | awk -F'"' '{print $4}')
-```
-
-```sql
-CREATE USER 'gitlab'@'172.17.%.%' IDENTIFIED BY 'password';
-CREATE DATABASE IF NOT EXISTS `gitlabhq_production` DEFAULT CHARACTER SET `utf8` COLLATE `utf8_unicode_ci`;
-GRANT SELECT, LOCK TABLES, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `gitlabhq_production`.* TO 'gitlab'@'172.17.%.%';
-FLUSH PRIVILEGES;
-```
-
-Now that we have the database created for gitlab, lets install the database schema. This is done by starting the gitlab container with the **app:rake gitlab:setup** command.
-
-```bash
-docker run --name=gitlab -i -t --rm --link mysql:mysql \
-  -e "DB_USER=gitlab" -e "DB_PASS=password" \
-  -e "DB_NAME=gitlabhq_production" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:setup
-```
-
-**NOTE: The above setup is performed only for the first run**.
-
-We are now ready to start the GitLab application.
-
-```bash
-docker run --name=gitlab -d --link mysql:mysql \
-  -e "DB_USER=gitlab" -e "DB_PASS=password" \
-  -e "DB_NAME=gitlabhq_production" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0
-```
-
-### PostgreSQL
 
 #### External PostgreSQL Server
 The image also supports using an external PostgreSQL Server. This is also controlled via environment variables.
@@ -282,8 +183,8 @@ To make sure the database is initialized start the container with **app:rake git
 ```bash
 docker run --name=gitlab -i -t --rm \
   -e "DB_TYPE=postgres" -e "DB_HOST=192.168.1.100" -e "DB_NAME=gitlabhq_production" -e "DB_USER=gitlab" -e "DB_PASS=password" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:setup
+  -v /opt/gitlab/data:/opt/git/data \
+  cgswong/docker-gitlab:latest app:rake gitlab:setup
 ```
 
 **NOTE: The above setup is performed only for the first run**.
@@ -293,8 +194,8 @@ This will initialize the gitlab database. Now that the database is initialized, 
 ```bash
 docker run --name=gitlab -d \
   -e "DB_TYPE=postgres" -e "DB_HOST=192.168.1.100" -e "DB_NAME=gitlabhq_production" -e "DB_USER=gitlab" -e "DB_PASS=password" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0
+  -v /opt/gitlab/data:/opt/git/data \
+  cgswong/docker-gitlab:latest
 ```
 
 #### Linking to PostgreSQL Container
@@ -302,11 +203,11 @@ You can link this image with a postgresql container for the database requirement
 
 If a postgresql container is linked, only the DB_HOST and DB_PORT settings are automatically retrieved using the linkage. You may still need to set other database connection parameters such as the DB_NAME, DB_USER, DB_PASS and so on.
 
-To illustrate linking with a postgresql container, we will use the [sameersbn/postgresql](https://github.com/sameersbn/docker-postgresql) image. When using postgresql image in production you should mount a volume for the postgresql data store. Please refer the [README](https://github.com/sameersbn/docker-postgresql/blob/master/README.md) of docker-postgresql for details.
+To illustrate linking with a postgresql container, we will use the [cgswong/docker-postgresql](https://github.com/cgswong/docker-postgresql) image. When using postgresql image in production you should mount a volume for the postgresql data store. Please refer the [README](https://github.com/cgswong/docker-postgresql/blob/master/README.md) of docker-postgresql for details.
 
 First, lets pull the postgresql image from the docker index.
 ```bash
-docker pull sameersbn/postgresql:latest
+docker pull cgswong/docker-postgresql:latest
 ```
 
 For data persistence lets create a store for the postgresql and start the container.
@@ -314,7 +215,7 @@ For data persistence lets create a store for the postgresql and start the contai
 mkdir -p /opt/postgresql/data
 docker run --name=postgresql -d \
   -v /opt/postgresql/data:/var/lib/postgresql \
-  sameersbn/postgresql:latest
+  cgswong/docker-postgresql:latest
 ```
 
 You should now have the postgresql server running. The password for the postgres user can be found in the logs of the postgresql image.
@@ -342,8 +243,8 @@ Now that we have the database created for gitlab, lets install the database sche
 docker run --name=gitlab -i -t --rm --link postgresql:postgresql \
   -e "DB_USER=gitlab" -e "DB_PASS=password" \
   -e "DB_NAME=gitlabhq_production" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:setup
+  -v /opt/gitlab/data:/opt/git/data \
+  cgswong/docker-gitlab:latest app:rake gitlab:setup
 ```
 
 **NOTE: The above setup is performed only for the first run**.
@@ -354,22 +255,17 @@ We are now ready to start the GitLab application.
 docker run --name=gitlab -d --link postgresql:postgresql \
   -e "DB_USER=gitlab" -e "DB_PASS=password" \
   -e "DB_NAME=gitlabhq_production" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0
+  -v /opt/gitlab/data:/opt/git/data \
+  cgswong/docker-gitlab:latest
 ```
 
 ## Redis
 
 ### Internal Redis Server
 
-> **Warning**
->
-> The internal redis server will soon be removed from the image.
-
-> Please use a linked [redis](#linking-to-redis-container) container
+> To cut down on container size, or for a more scalable deployment 
+> please use a linked [redis](#linking-to-redis-container) container
 > or a external [redis](#external-redis-server) server
-
-> You've been warned.
 
 GitLab uses the redis server for its key-value data store. The redis server connection details can be specified using environment variables. If not specified, the  starts a redis server internally, no additional configuration is required.
 
@@ -381,28 +277,28 @@ The image can be configured to use an external redis server instead of starting 
 ```bash
 docker run --name=gitlab -i -t --rm \
   -e "REDIS_HOST=192.168.1.100" -e "REDIS_PORT=6379" \
-  sameersbn/gitlab:7.0.0
+  cgwong/docker-gitlab:latest
 ```
 ### Linking to Redis Container
 You can link this image with a redis container to satisfy gitlab's redis requirement. The alias of the redis server container should be set to **redisio** while linking with the gitlab image.
 
-To illustrate linking with a redis container, we will use the [sameersbn/redis](https://github.com/sameersbn/docker-redis) image. Please refer the [README](https://github.com/sameersbn/docker-redis/blob/master/README.md) of docker-redis for details.
+To illustrate linking with a redis container, we will use the [cgwong/docker-redis](https://github.com/cgwong/docker-redis) image. Please refer the [README](https://github.com/cgwong/docker-redis/blob/master/README.md) of docker-redis for details.
 
 First, lets pull the redis image from the docker index.
 ```bash
-docker pull sameersbn/redis:latest
+docker pull cgwong/docker-redis:latest
 ```
 
 Lets start the redis container
 ```bash
-docker run --name=redis -d sameersbn/redis:latest
+docker run --name=redis -d cgwong/docker-redis:latest
 ```
 
 We are now ready to start the GitLab application.
 
 ```bash
 docker run --name=gitlab -d --link redis:redisio \
-  sameersbn/gitlab:7.0.0
+  cgwong/docker-gitlab:latest
 ```
 
 ### Mail
@@ -421,8 +317,8 @@ The following environment variables need to be specified to get mail support to 
 ```bash
 docker run --name=gitlab -d \
   -e "SMTP_USER=USER@gmail.com" -e "SMTP_PASS=PASSWORD" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0
+  -v /opt/gitlab/data:/opt/git/data \
+  cgwong/docker-gitlab:latest
 ```
 
 ### SSL
@@ -454,7 +350,7 @@ openssl req -new -key gitlab.key -out gitlab.csr
 openssl x509 -req -days 365 -in gitlab.csr -signkey gitlab.key -out gitlab.crt
 ```
 
-Congratulations! you have now generated an SSL certificate thats valid for 365 days.
+Congratulations! you have now generated an SSL certificate that's valid for 365 days.
 
 #### Strengthening the server security
 This section provides you with instructions to [strengthen your server security](https://raymii.org/s/tutorials/Strong_SSL_Security_On_nginx.html). To achieve this we need to generate stronger DHE parameters.
@@ -466,9 +362,9 @@ openssl dhparam -out dhparam.pem 2048
 #### Installation of the SSL Certificates
 Out of the four files generated above, we need to install the gitlab.key, gitlab.crt and dhparam.pem files at the gitlab server. The CSR file is not needed, but do make sure you safely backup the file (in case you ever need it again).
 
-The default path that the gitlab application is configured to look for the SSL certificates is at /home/git/data/certs, this can however be changed using the SSL_KEY_PATH, SSL_CERTIFICATE_PATH and SSL_DHPARAM_PATH configuration options.
+The default path that the gitlab application is configured to look for the SSL certificates is at /opt/git/data/certs, this can however be changed using the SSL_KEY_PATH, SSL_CERTIFICATE_PATH and SSL_DHPARAM_PATH configuration options.
 
-If you remember from above, the /home/git/data path is the path of the [data store](#data-store), which means that we have to create a folder named certs inside /opt/gitlab/data/ and copy the files into it and as a measure of security we will update the permission on the gitlab.key file to only be readable by the owner.
+If you remember from above, the /opt/git/data path is the path of the [data store](#data-store), which means that we have to create a folder named certs inside /opt/gitlab/data/ and copy the files into it and as a measure of security we will update the permission on the gitlab.key file to only be readable by the owner.
 
 ```bash
 mkdir -p /opt/gitlab/data/certs
@@ -486,8 +382,8 @@ HTTPS support can be enabled by setting the GITLAB_HTTPS option to true. Additio
 ```bash
 docker run --name=gitlab -d \
   -e "GITLAB_HTTPS=true" -e "SSL_SELF_SIGNED=true" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0
+  -v /opt/gitlab/data:/opt/git/data \
+  cgwong/docker-gitlab:latest
 ```
 
 In this configuration, any requests made over the plain http protocol will automatically be redirected to use the https protocol. However, this is not optimal when using a load balancer.
@@ -504,36 +400,36 @@ In summation, the docker command would look something like this:
 docker run --name=gitlab -d \
   -e "GITLAB_HTTPS=true" -e "SSL_SELF_SIGNED=true" \
   -e "GITLAB_HTTPS_ONLY=false" \
-  -v /opt/gitlab/data:/home/git/data \
-  sameersbn/gitlab:7.0.0
+  -v /opt/gitlab/data:/opt/git/data \
+  cgwong/docker-gitlab:latest
 ```
 
 Again, drop the ```-e "SSL_SELF_SIGNED=true"``` option if you are using CA certified SSL certificates.
 
 #### Establishing trust with your server
-This section deals will self-signed ssl certificates. If you are using CA certified certificates, your done.
+This section deals will self-signed SSL certificates. If you are using CA certified certificates, your done.
 
 This section is more of a client side configuration so as to add a level of confidence at the client to be 100 percent sure they are communicating with whom they think they.
 
-This is simply done by adding the servers certificate into their list of trusted ceritficates. On ubuntu, this is done by appending the contents of the gitlab.crt file to the ```/etc/ssl/certs/ca-certificates.crt``` file.
+This is simply done by adding the servers certificate into their list of trusted certificates. On Ubuntu, this is done by appending the contents of the gitlab.crt file to the ```/etc/ssl/certs/ca-certificates.crt``` file.
 
-Again, this is a client side configuration which means that everyone who is going to communicate with the server should perform this configuration on their machine. In short, distribute the gitlab.crt file among your developers and ask them to add it to their list of trusted ssl certificates. Failure to do so will result in errors that look like this:
+Again, this is a client side configuration which means that everyone who is going to communicate with the server should perform this configuration on their machine. In short, distribute the gitlab.crt file among your developers and ask them to add it to their list of trusted SSL certificates. Failure to do so will result in errors that look like this:
 
 ```bash
 git clone https://git.local.host/gitlab-ce.git
 fatal: unable to access 'https://git.local.host/gitlab-ce.git': server certificate verification failed. CAfile: /etc/ssl/certs/ca-certificates.crt CRLfile: none
 ```
 
-You can do the same at the web browser. Instructions for installing the root certificate for firefox can be found [here](http://portal.threatpulse.com/docs/sol/Content/03Solutions/ManagePolicy/SSL/ssl_firefox_cert_ta.htm). You will find similar options chrome, just make sure you install the certificate under the authorities tab of the certificate manager dialog.
+You can do the same at the web browser. Instructions for installing the root certificate for Firefox can be found [here](http://portal.threatpulse.com/docs/sol/Content/03Solutions/ManagePolicy/SSL/ssl_firefox_cert_ta.htm). You will find similar options chrome, just make sure you install the certificate under the authorities tab of the certificate manager dialog.
 
-There you have it, thats all there is to it.
+There you have it, that's all there is to it.
 
 #### Installing Trusted SSL Server Certificates
 If your GitLab CI server is using self-signed SSL certificates then you should make sure the GitLab CI server certificate is trusted on the GitLab server for them to be able to talk to each other.
 
-The default path image is configured to look for the trusted SSL certificates is at /home/git/data/certs/ca.crt, this can however be changed using the CA_CERTIFICATES_PATH configuration option.
+The default path image is configured to look for the trusted SSL certificates is at /opt/git/data/certs/ca.crt, this can however be changed using the CA_CERTIFICATES_PATH configuration option.
 
-Copy the ca.crt file into the certs directory on the [datastore](#data-store). The ca.crt file should contain the root certificates of all the servers you want to trust. With respect to GitLab CI, this will be the contents of the gitlab_ci.crt file as described in the [README](https://github.com/sameersbn/docker-gitlab-ci/blob/master/README.md#ssl) of the [docker-gitlab-ci](https://github.com/sameersbn/docker-gitlab-ci) container.
+Copy the ca.crt file into the certs directory on the [datastore](#data-store). The ca.crt file should contain the root certificates of all the servers you want to trust. With respect to GitLab CI, this will be the contents of the gitlab_ci.crt file as described in the [README](https://github.com/cgwong/docker-gitlab-ci/blob/master/README.md#ssl) of the [docker-gitlab-ci](https://github.com/cgwong/docker-gitlab-ci) container.
 
 By default, our own server certificate [gitlab.crt](#generation-of-self-signed-certificates) is added to the trusted certificates list.
 
@@ -541,22 +437,22 @@ By default, our own server certificate [gitlab.crt](#generation-of-self-signed-c
 
 ```bash
 docker run --name=gitlab -d -h git.local.host \
-  -v /opt/gitlab/data:/home/git/data \
-  -v /opt/gitlab/mysql:/var/lib/mysql \
+  -v /opt/gitlab/data:/opt/git/data \
+  -v /opt/gitlab/postgresql:/var/lib/postgresql \
   -e "GITLAB_HOST=git.local.host" -e "GITLAB_EMAIL=gitlab@local.host" -e "GITLAB_SUPPORT=support@local.host" \
   -e "SMTP_USER=USER@gmail.com" -e "SMTP_PASS=PASSWORD" \
-  sameersbn/gitlab:7.0.0
+  cgwong/docker-gitlab:latest
 ```
 
-If you are using an external mysql database
+If you are using an external postgresql database
 
 ```bash
 docker run --name=gitlab -d -h git.local.host \
-  -v /opt/gitlab/data:/home/git/data \
+  -v /opt/gitlab/data:/opt/git/data \
   -e "DB_HOST=192.168.1.100" -e "DB_NAME=gitlabhq_production" -e "DB_USER=gitlab" -e "DB_PASS=password" \
   -e "GITLAB_HOST=git.local.host" -e "GITLAB_EMAIL=gitlab@local.host" -e "GITLAB_SUPPORT=support@local.host" \
   -e "SMTP_USER=USER@gmail.com" -e "SMTP_PASS=PASSWORD" \
-  sameersbn/gitlab:7.0.0
+  cgwong/docker-gitlab:latest
 ```
 
 ### Run under sub URI
@@ -565,9 +461,9 @@ The path should start with slash, and should not have any trailing slashes.
 
 ```bash
 docker run --name=gitlab -d \
-  -v /opt/gitlab/data:/home/git/data \
+  -v /opt/gitlab/data:/opt/git/data \
   -e "GITLAB_RELATIVE_URL_ROOT=/gitlab" \
-  sameersbn/gitlab:7.0.0
+  cgwong/docker-gitlab:latest
 ```
 
 When you change the sub URI path, you need to recompile all precompiled assets. This can be done with either deleting tmp/cache/VERSION file under data store, or just `rm -Rf /PATH/TO/DATA_STORE/tmp`. After cleaning up cache files, restart the container.
@@ -645,7 +541,7 @@ To take a backup all you need to do is run the gitlab rake task to create a back
 
 ```bash
 docker run --name=gitlab -i -t --rm [OPTIONS] \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:backup:create
+  cgwong/docker-gitlab:latest app:rake gitlab:backup:create
 ```
 
 A backup will be created in the backups folder of the [Data Store](#data-store)
@@ -662,7 +558,7 @@ To restore a backup, run the image in interactive (-i -t) mode and pass the "app
 
 ```bash
 docker run --name=gitlab -i -t --rm [OPTIONS] \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:backup:restore
+  cgwong/docker-gitlab:latest app:rake gitlab:backup:restore
 ```
 
 The restore operation will list all available backups in reverse chronological order. Select the backup you want to restore and gitlab will do its job.
@@ -684,7 +580,7 @@ To upgrade to newer gitlab releases, simply follow this 4 step upgrade procedure
 - **Step 1**: Update the docker image.
 
 ```bash
-docker pull sameersbn/gitlab:7.0.0
+docker pull cgwong/docker-gitlab:latest
 ```
 
 - **Step 2**: Stop the currently running image
@@ -697,13 +593,13 @@ docker stop gitlab
 
 ```bash
 docker run --name=gitlab -i -t --rm [OPTIONS] \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:backup:create
+  cgwong/docker-gitlab:latest app:rake gitlab:backup:create
 ```
 
 - **Step 4**: Start the image
 
 ```bash
-docker run --name=gitlab -d [OPTIONS] sameersbn/gitlab:7.0.0
+docker run --name=gitlab -d [OPTIONS] cgwong/docker-gitlab:latest
 ```
 
 ## Rake Tasks
@@ -712,14 +608,14 @@ The app:rake command allows you to run gitlab rake tasks. To run a rake task sim
 
 ```bash
 docker run --name=gitlab -d [OPTIONS] \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:env:info
+  cgwong/docker-gitlab:latest app:rake gitlab:env:info
 ```
 
 Similarly, to import bare repositories into GitLab project instance
 
 ```bash
 docker run --name=gitlab -d [OPTIONS] \
-  sameersbn/gitlab:7.0.0 app:rake gitlab:import:repos
+  cgwong/docker-gitlab:latest app:rake gitlab:import:repos
 ```
 
 For a complete list of available rake tasks please refer https://github.com/gitlabhq/gitlabhq/tree/master/doc/raketasks or the help section of your gitlab installation.

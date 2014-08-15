@@ -1,18 +1,20 @@
-FROM sameersbn/ubuntu:14.04.20140628
-MAINTAINER sameer@damagehead.com
+FROM centos:6
+MAINTAINER cgs.wong@gmail.com
 
-RUN add-apt-repository -y ppa:git-core/ppa && \
-		add-apt-repository -y ppa:brightbox/ruby-ng && \
-		add-apt-repository -y ppa:nginx/stable && \
-		apt-get update && \
-		apt-get install -y build-essential checkinstall postgresql-client \
-			nginx git-core openssh-server mysql-server redis-server python2.7 python-docutils \
-			libmysqlclient-dev libpq-dev zlib1g-dev libyaml-dev libssl-dev \
-			libgdbm-dev libreadline-dev libncurses5-dev libffi-dev \
-			libxml2-dev libxslt-dev libcurl4-openssl-dev libicu-dev \
-			ruby2.1 ruby2.1-dev && \
-		gem install --no-ri --no-rdoc bundler && \
-		apt-get clean # 20140627
+# Download the package and install everything
+RUN wget https://downloads-packages.s3.amazonaws.com/centos-6.5/gitlab-7.0.0_omnibus-1.el6.x86_64.rpm
+RUN sudo yum -y update
+RUN sudo yum -y install openssh-server
+RUN sudo yum -y install postfix
+RUN sudo rpm -i gitlab-7.0.0_omnibus-1.el6.x86_64.rpm
+
+# Edit the configuration file to add your hostname
+RUN sudo -e /etc/gitlab/gitlab.rb
+
+# Install and start GitLab
+RUN sudo gitlab-ctl reconfigure
+RUN sudo lokkit -s http -s ssh
+
 
 ADD assets/setup/ /app/setup/
 RUN chmod 755 /app/setup/install
@@ -22,11 +24,13 @@ ADD assets/config/ /app/setup/config/
 ADD assets/init /app/init
 RUN chmod 755 /app/init
 
+# Expose ports for access
 EXPOSE 22
 EXPOSE 80
 EXPOSE 443
 
-VOLUME ["/home/git/data"]
+# Create persistent volume from host
+VOLUME ["/opt/git/data"]
 
 ENTRYPOINT ["/app/init"]
 CMD ["app:start"]
