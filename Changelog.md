@@ -1,6 +1,47 @@
 # Changelog
 
 **latest**
+- added GITLAB_USERNAME_CHANGE configuration option
+
+**7.2.1-1**
+- removed the GITLAB_HTTPS_ONLY configuration option
+- added NGINX_X_FORWARDED_PROTO configuration option
+- optimization: talk directly to the unicorn worker from gitlab-shell
+
+**7.2.1**
+- upgrade to gitlab-ce 7.2.1
+- added new SMTP_ENABLED configuration option.
+
+**7.2.0-1**
+- fix nginx static route handling when GITLAB_RELATIVE_URL_ROOT is used.
+- fix relative root access without the trailing '/' character
+- added seperate server block for http config in gitlab.https.permissive. Fixes #127
+- added OAUTH_GOOGLE_RESTRICT_DOMAIN config option.
+
+**7.2.0**
+- upgrade to gitlab-ce 7.2.0
+- update to the sameersbn/ubuntu:14.04.20140818 baseimage
+- remove /var/lib/apt/lists to optimize image size.
+- disable UsePrivilegeSeparation in sshd configuration, fixes #122
+- added OAUTH_BLOCK_AUTO_CREATED_USERS configuration option
+- added OAUTH_ALLOW_SSO configuration option
+- added github oauth configuration support
+- added twitter oauth configuration support
+- added google oauth configuration support
+- added support for jira issue tracker
+- added support for redmine issue tracker
+- update to gitlab-shell 1.9.7
+- update to the sameersbn/ubuntu:14.04.20140812 baseimage
+
+**7.1.1**
+- removed "add_header X-Frame-Options DENY" setting from the nginx config. fixes #110
+- upgrade to gitlab-ce 7.1.1
+- run /etc/init.d/gitlab as git user, plays nicely with selinux
+
+**7.1.0**
+- removed GITLAB_SUPPORT configuration option
+- upgrade to gitlab-ce 7.1.0
+- clone gitlab-ce and gitlab-shell sources from the git repo.
 - disable pam authentication module in sshd
 - update to the sameersbn/ubuntu:14.04.20140628 baseimage
 - no more root access over ssh, use nsenter instead

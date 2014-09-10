@@ -49,23 +49,34 @@
 ## [1] https://github.com/agentzh/chunkin-nginx-module#status
 ## [2] https://github.com/agentzh/chunkin-nginx-module
 
+
 upstream gitlab {
 
   ## Uncomment if you have set up unicorn to listen on a unix socket (recommended).
-  server unix:/home/git/gitlab/tmp/sockets/gitlab.socket;
+  server unix:{{GITLAB_INSTALL_DIR}}/tmp/sockets/gitlab.socket;
 
   ## Uncomment if unicorn is configured to listen on a tcp port.
-  ## Check the port number in /home/git/gitlab/config/unicorn.rb
+  ## Check the port number in {{GITLAB_INSTALL_DIR}}/config/unicorn.rb
   # server 127.0.0.1:8080;
 }
 
+## This is a normal HTTP host which redirects all traffic to the HTTPS host.
 server {
-  listen 80;
+  listen *:80;
+  ## Replace git.example.com with your FQDN.
+  server_name _;
+  server_tokens off;
+  ## root doesn't have to be a valid path since we are redirecting
+  root /nowhere;
+  rewrite ^ https://$host:{{GITLAB_PORT}}$request_uri? permanent;
+}
+
+server {
   listen 443 ssl spdy;
   ## Replace git.example.com with your FQDN.
   server_name {{YOUR_SERVER_FQDN}};
   server_tokens off;
-  root /dev/null;
+  root {{GITLAB_INSTALL_DIR}}/public;
 
   ## Increase this if you want to upload large attachments
   ## Or if you want to accept large git objects over http
@@ -100,15 +111,15 @@ server {
   ssl_dhparam {{SSL_DHPARAM_PATH}};
 
   add_header Strict-Transport-Security max-age=63072000;
-  add_header X-Frame-Options DENY;
+  # add_header X-Frame-Options DENY;
   add_header X-Content-Type-Options nosniff;
 
   ## Individual nginx logs for this GitLab vhost
   access_log  /var/log/nginx/gitlab_access.log;
   error_log   /var/log/nginx/gitlab_error.log;
 
-  location {{GITLAB_RELATIVE_URL_ROOT}}/ {
-    root /home/git/gitlab/public;
+  location {{GITLAB_RELATIVE_URL_ROOT}} {
+    # alias {{GITLAB_INSTALL_DIR}}/public;
     ## Serve static files from defined root folder.
     ## @gitlab is a named location for the upstream fallback, see below.
     try_files $uri $uri/index.html $uri.html @gitlab;
@@ -132,7 +143,7 @@ server {
     proxy_set_header    X-Real-IP           $remote_addr;
     proxy_set_header    X-Forwarded-Ssl     on;
     proxy_set_header    X-Forwarded-For     $proxy_add_x_forwarded_for;
-    proxy_set_header    X-Forwarded-Proto   $scheme;
+    proxy_set_header    X-Forwarded-Proto   {{NGINX_X_FORWARDED_PROTO}};
     proxy_set_header    X-Frame-Options     SAMEORIGIN;
 
     proxy_pass http://gitlab;
@@ -143,8 +154,8 @@ server {
   ## WARNING: If you are using relative urls do remove the block below
   ## See config/application.rb under "Relative url support" for the list of
   ## other files that need to be changed for relative url support
-  location ~ ^{{GITLAB_RELATIVE_URL_ROOT}}/assets/(.*) {
-    alias /home/git/gitlab/public/assets/$1;
+  location ~ ^{{GITLAB_RELATIVE_URL_ROOT__with_trailing_slash}}assets/(.*) {
+    alias {{GITLAB_INSTALL_DIR}}/public/assets/$1;
     gzip_static on; # to serve pre-gzipped version
     expires max;
     add_header Cache-Control public;

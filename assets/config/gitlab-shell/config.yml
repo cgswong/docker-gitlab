@@ -2,7 +2,7 @@
 user: git
 
 # Url to gitlab instance. Used for api calls. Should end with a slash.
-gitlab_url: "{{GITLAB_URL}}"
+gitlab_url: "http://localhost:8080{{GITLAB_RELATIVE_URL_ROOT}}/"
 
 http_settings:
 #  user: someone
@@ -15,7 +15,7 @@ http_settings:
 # Give the canonicalized absolute pathname,
 # REPOS_PATH MUST NOT CONTAIN ANY SYMLINK!!!
 # Check twice that none of the components is a symlink, including "/home".
-repos_path: "/home/git/data/repositories"
+repos_path: "{{GITLAB_DATA_DIR}}/repositories"
 
 # File used as authorized_keys for gitlab user
 auth_file: "/home/git/.ssh/authorized_keys"
