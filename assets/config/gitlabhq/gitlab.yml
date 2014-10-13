@@ -41,7 +41,7 @@ production: &base
 
     ## User settings
     default_projects_limit: {{GITLAB_PROJECTS_LIMIT}}
-    # default_can_create_group: false  # default: true
+    default_can_create_group: {{GITLAB_CREATE_GROUP}} # default: true - User can create groups
     username_changing_enabled: {{GITLAB_USERNAME_CHANGE}} # default: true - User can change her username/namespace
     ## Default theme
     ##   BASIC  = 1
@@ -120,7 +120,7 @@ production: &base
 
   ## Gravatar
   gravatar:
-    enabled: true                 # Use user avatar image from Gravatar.com (default: true)
+    enabled: {{GITLAB_GRAVATAR_ENABLED}}
     # gravatar urls: possible placeholders: %{hash} %{size} %{email}
     # plain_url: "http://..."     # default: http://www.gravatar.com/avatar/%{hash}?s=%{size}&d=identicon
     # ssl_url:   "https://..."    # default: https://secure.gravatar.com/avatar/%{hash}?s=%{size}&d=identicon

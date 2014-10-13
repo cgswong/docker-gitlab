@@ -1,5 +1,30 @@
 # Changelog
 
+**7.3.2-1**
+- fix mysql status check
+
+**7.3.2**
+- upgrade to gitlab-ce 7.3.2
+- removed internal mysql server
+- added support for fetching `DB_NAME`, `DB_USER` and `DB_PASS` from the postgresql linkage
+- added support for fetching `DB_NAME`, `DB_USER` and `DB_PASS` from the mysql linkage
+- gitlab-shell: upgrade to v.2.0.1
+- added GITLAB_GRAVATAR_ENABLED configuration option
+- added fig.yml
+
+**7.3.1-3**
+- fix mysql command again!
+
+**7.3.1-2**
+- fix mysql server status check
+
+**7.3.1-1**
+- plug bash vulnerability by switching to dash shell
+- automatically run the `gitlab:setup` rake task for new installs
+
+**7.3.1**
+- upgrade to gitlab-ce 7.3.1
+
 **7.3.0**
 - upgrade to gitlab-ce 7.3.0
 - added GITLAB_WEBHOOK_TIMEOUT configuration option
