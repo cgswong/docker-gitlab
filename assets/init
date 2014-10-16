@@ -51,7 +51,7 @@ REDIS_PORT=${REDIS_PORT:-}
 
 UNICORN_WORKERS=${UNICORN_WORKERS:-2}
 UNICORN_TIMEOUT=${UNICORN_TIMEOUT:-60}
-SIDEKIQ_CONCURRENCY=${SIDEKIQ_CONCURRENCY:-5}
+SIDEKIQ_CONCURRENCY=${SIDEKIQ_CONCURRENCY:-25}
 
 DB_TYPE=${DB_TYPE:-}
 DB_HOST=${DB_HOST:-}
@@ -291,7 +291,6 @@ sudo -u git -H cp ${SYSCONF_TEMPLATES_DIR}/gitlab-shell/config.yml    ${GITLAB_S
 sudo -u git -H cp ${SYSCONF_TEMPLATES_DIR}/gitlabhq/gitlab.yml        config/gitlab.yml
 sudo -u git -H cp ${SYSCONF_TEMPLATES_DIR}/gitlabhq/resque.yml        config/resque.yml
 sudo -u git -H cp ${SYSCONF_TEMPLATES_DIR}/gitlabhq/database.yml      config/database.yml
-sudo -u git -H cp ${SYSCONF_TEMPLATES_DIR}/gitlabhq/sidekiq.yml       config/sidekiq.yml
 sudo -u git -H cp ${SYSCONF_TEMPLATES_DIR}/gitlabhq/unicorn.rb        config/unicorn.rb
 sudo -u git -H cp ${SYSCONF_TEMPLATES_DIR}/gitlabhq/rack_attack.rb    config/initializers/rack_attack.rb
 [ "${SMTP_ENABLED}" == "true" ] && \
@@ -313,7 +312,6 @@ esac
 [ -f ${USERCONF_TEMPLATES_DIR}/gitlabhq/gitlab.yml ]       && sudo -u git -H cp ${USERCONF_TEMPLATES_DIR}/gitlabhq/gitlab.yml       config/gitlab.yml
 [ -f ${USERCONF_TEMPLATES_DIR}/gitlabhq/resque.yml ]       && sudo -u git -H cp ${USERCONF_TEMPLATES_DIR}/gitlabhq/resque.yml       config/resque.yml
 [ -f ${USERCONF_TEMPLATES_DIR}/gitlabhq/database.yml ]     && sudo -u git -H cp ${USERCONF_TEMPLATES_DIR}/gitlabhq/database.yml     config/database.yml
-[ -f ${USERCONF_TEMPLATES_DIR}/gitlabhq/sidekiq.yml ]      && sudo -u git -H cp ${USERCONF_TEMPLATES_DIR}/gitlabhq/sidekiq.yml      config/sidekiq.yml
 [ -f ${USERCONF_TEMPLATES_DIR}/gitlabhq/unicorn.rb ]       && sudo -u git -H cp ${USERCONF_TEMPLATES_DIR}/gitlabhq/unicorn.rb       config/unicorn.rb
 [ -f ${USERCONF_TEMPLATES_DIR}/gitlabhq/rack_attack.rb ]   && sudo -u git -H cp ${USERCONF_TEMPLATES_DIR}/gitlabhq/rack_attack.rb   config/initializers/rack_attack.rb
 [ "${SMTP_ENABLED}" == "true" ] && \
@@ -392,8 +390,8 @@ sudo -u git -H sed 's/{{DB_USER}}/'"${DB_USER}"'/' -i config/database.yml
 sudo -u git -H sed 's/{{DB_PASS}}/'"${DB_PASS}"'/' -i config/database.yml
 sudo -u git -H sed 's/{{DB_POOL}}/'"${DB_POOL}"'/' -i config/database.yml
 
-# configure sidekiq
-sudo -u git -H sed 's/{{SIDEKIQ_CONCURRENCY}}/'"${SIDEKIQ_CONCURRENCY}"'/' -i config/sidekiq.yml
+# configure sidekiq concurrency
+sed 's/{{SIDEKIQ_CONCURRENCY}}/'"${SIDEKIQ_CONCURRENCY}"'/' -i /etc/supervisor/conf.d/sidekiq.conf
 
 # configure redis
 sudo -u git -H sed 's/{{REDIS_HOST}}/'"${REDIS_HOST}"'/g' -i config/resque.yml
@@ -626,11 +624,12 @@ appStart () {
     sudo -u git -H force=yes bundle exec rake gitlab:setup RAILS_ENV=production >/dev/null
   fi
 
-  # migrate database and compile the assets if the gitlab version has changed.
+  # migrate database and compile the assets if the gitlab version or relative_url has changed.
   CACHE_VERSION=
   GITLAB_VERSION=$(cat VERSION)
   [ -f tmp/cache/VERSION ] && CACHE_VERSION=$(cat tmp/cache/VERSION)
-  if [ "${GITLAB_VERSION}" != "${CACHE_VERSION}" ]; then
+  [ -f tmp/cache/GITLAB_RELATIVE_URL_ROOT ] && CACHE_GITLAB_RELATIVE_URL_ROOT=$(cat tmp/cache/GITLAB_RELATIVE_URL_ROOT)
+  if [ "${GITLAB_VERSION}" != "${CACHE_VERSION}" -o "${GITLAB_RELATIVE_URL_ROOT}" != "${CACHE_GITLAB_RELATIVE_URL_ROOT}" ]; then
     echo "Migrating database..."
     sudo -u git -H bundle exec rake db:migrate RAILS_ENV=production >/dev/null
 
@@ -648,6 +647,7 @@ appStart () {
     sudo -u git -H bundle exec rake assets:precompile RAILS_ENV=production 2>/dev/null
     sudo -u git -H touch tmp/cache/VERSION
     sudo -u git -H echo "${GITLAB_VERSION}" > tmp/cache/VERSION
+    sudo -u git -H echo "${GITLAB_RELATIVE_URL_ROOT}" > tmp/cache/GITLAB_RELATIVE_URL_ROOT
   fi
 
   # remove stale unicorn and sidekiq pid's if they exist.

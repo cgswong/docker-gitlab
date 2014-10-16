@@ -1,5 +1,9 @@
 # Changelog
 
+**latest**
+- automatically compile assets if relative_url is changed
+- launch all daemons via supervisord
+
 **7.3.2-1**
 - fix mysql status check
 

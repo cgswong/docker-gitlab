@@ -25,7 +25,7 @@ apt-get install -y gcc g++ make patch pkg-config cmake \
 rm -rf /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
 
 # add git user
-adduser --disabled-login --shell /bin/dash --gecos 'GitLab' git
+adduser --disabled-login --gecos 'GitLab' git
 passwd -d git
 
 rm -rf /home/git/.ssh
@@ -122,7 +122,7 @@ EOF
 cat > /etc/supervisor/conf.d/unicorn.conf <<EOF
 [program:unicorn]
 priority=10
-directory=/home/git/gitlab
+directory=${GITLAB_INSTALL_DIR}
 environment=HOME=/home/git
 command=bundle exec unicorn_rails -c ${GITLAB_INSTALL_DIR}/config/unicorn.rb -E production
 user=git
@@ -137,9 +137,9 @@ EOF
 cat > /etc/supervisor/conf.d/sidekiq.conf <<EOF
 [program:sidekiq]
 priority=10
-directory=/home/git/gitlab
+directory=${GITLAB_INSTALL_DIR}
 environment=HOME=/home/git
-command=bundle exec sidekiq
+command=bundle exec sidekiq -c {{SIDEKIQ_CONCURRENCY}}
   -q post_receive
   -q mailer
   -q system_hook

@@ -11,39 +11,39 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
-    - [Data Store](#data-store)
-    - [Database](#database)
-        - [MySQL](#mysql)
-            - [Internal MySQL Server](#internal-mysql-server)
-            - [External MySQL Server](#external-mysql-server)
-            - [Linking to MySQL Container](#linking-to-mysql-container)
-        - [PostgreSQL (Recommended)](#postgresql)
-            - [External PostgreSQL Server](#external-postgresql-server)
-            - [Linking to PostgreSQL Container](#linking-to-postgresql-container)
-    - [Redis](#redis)
-      - [Internal Redis Server](#internal-redis-server)
-      - [External Redis Server](#external-redis-server)
-      - [Linking to Redis Container](#linking-to-redis-container)
-    - [Mail](#mail)
-    - [SSL](#ssl)
-      - [Generation of Self Signed Certificates](#generation-of-self-signed-certificates)
-      - [Strengthening the server security](#strengthening-the-server-security)
-      - [Installation of the Certificates](#installation-of-the-certificates)
-      - [Enabling HTTPS support](#enabling-https-support)
-      - [Configuring HSTS](#configuring-hsts)
-      - [Using HTTPS with a load balancer](#using-https-with-a-load-balancer)
-      - [Establishing trust with your server](#establishing-trust-with-your-server)
-      - [Installing Trusted SSL Server Certificates](#installing-trusted-ssl-server-certificates)
-    - [Deploy to a subdirectory (relative url root)](#deploy-to-a-subdirectory-relative-url-root)
-    - [Putting it all together](#putting-it-all-together)
-    - [OmniAuth Integration](#omniauth-integration)
-      - [Google](#google)
-      - [Twitter](#twitter)
-      - [GitHub](#github)
-    - [External Issue Trackers](#external-issue-trackers)
-      - [Redmine](#redmine)
-      - [Jira](#jira)
-    - [Available Configuration Parameters](#available-configuration-parameters)
+  - [Data Store](#data-store)
+  - [Database](#database)
+    - [MySQL](#mysql)
+      - [Internal MySQL Server](#internal-mysql-server)
+      - [External MySQL Server](#external-mysql-server)
+      - [Linking to MySQL Container](#linking-to-mysql-container)
+    - [PostgreSQL (Recommended)](#postgresql)
+      - [External PostgreSQL Server](#external-postgresql-server)
+      - [Linking to PostgreSQL Container](#linking-to-postgresql-container)
+  - [Redis](#redis)
+    - [Internal Redis Server](#internal-redis-server)
+    - [External Redis Server](#external-redis-server)
+    - [Linking to Redis Container](#linking-to-redis-container)
+  - [Mail](#mail)
+  - [SSL](#ssl)
+    - [Generation of Self Signed Certificates](#generation-of-self-signed-certificates)
+    - [Strengthening the server security](#strengthening-the-server-security)
+    - [Installation of the Certificates](#installation-of-the-certificates)
+    - [Enabling HTTPS support](#enabling-https-support)
+    - [Configuring HSTS](#configuring-hsts)
+    - [Using HTTPS with a load balancer](#using-https-with-a-load-balancer)
+    - [Establishing trust with your server](#establishing-trust-with-your-server)
+    - [Installing Trusted SSL Server Certificates](#installing-trusted-ssl-server-certificates)
+  - [Deploy to a subdirectory (relative url root)](#deploy-to-a-subdirectory-relative-url-root)
+  - [Putting it all together](#putting-it-all-together)
+  - [OmniAuth Integration](#omniauth-integration)
+    - [Google](#google)
+    - [Twitter](#twitter)
+    - [GitHub](#github)
+  - [External Issue Trackers](#external-issue-trackers)
+    - [Redmine](#redmine)
+    - [Jira](#jira)
+  - [Available Configuration Parameters](#available-configuration-parameters)
 - [Maintenance](#maintenance)
     - [Creating Backups](#creating-backups)
     - [Restoring Backups](#restoring-backups)
@@ -229,7 +229,7 @@ Before you start the GitLab image create user and database for gitlab.
 ```sql
 CREATE USER 'gitlab'@'%.%.%.%' IDENTIFIED BY 'password';
 CREATE DATABASE IF NOT EXISTS `gitlabhq_production` DEFAULT CHARACTER SET `utf8` COLLATE `utf8_unicode_ci`;
-GRANT SELECT, LOCK TABLES, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER ON `gitlabhq_production`.* TO 'gitlab'@'%.%.%.%';
+GRANT ALL PRIVILEGES ON `gitlabhq_production`.* TO 'gitlab'@'%.%.%.%';
 ```
 
 We are now ready to start the GitLab application.
@@ -698,7 +698,7 @@ Below is the complete list of available options that can be used to customize yo
 - **REDIS_PORT**: The connection port of the redis server. Defaults to `6379`.
 - **UNICORN_WORKERS**: The number of unicorn workers to start. Defaults to `2`.
 - **UNICORN_TIMEOUT**: Sets the timeout of unicorn worker processes. Defaults to `60` seconds.
-- **SIDEKIQ_CONCURRENCY**: The number of concurrent sidekiq jobs to run. Defaults to `5`
+- **SIDEKIQ_CONCURRENCY**: The number of concurrent sidekiq jobs to run. Defaults to `25`
 - **DB_TYPE**: The database type. Possible values: `mysql`, `postgres`. Defaults to `mysql`.
 - **DB_HOST**: The database server hostname. Defaults to `localhost`.
 - **DB_PORT**: The database server port. Defaults to `3306` for mysql and `5432` for postgresql.
