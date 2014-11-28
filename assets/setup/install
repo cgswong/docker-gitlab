@@ -1,12 +1,14 @@
 #!/bin/bash
 set -e
 
-GITLAB_VERSION=7.3.2
-GITLAB_SHELL_VERSION=2.0.1
+GITLAB_VERSION=7.5.1
+GITLAB_SHELL_VERSION=2.2.0
 
-GITLAB_INSTALL_DIR="/home/git/gitlab"
-GITLAB_DATA_DIR="/home/git/data"
-GITLAB_SHELL_INSTALL_DIR="/home/git/gitlab-shell"
+GITLAB_HOME="/home/git"
+GITLAB_INSTALL_DIR="${GITLAB_HOME}/gitlab"
+GITLAB_DATA_DIR="${GITLAB_HOME}/data"
+GITLAB_LOG_DIR="/var/log/gitlab"
+GITLAB_SHELL_INSTALL_DIR="${GITLAB_HOME}/gitlab-shell"
 
 SETUP_DIR="/app/setup"
 GEM_CACHE_DIR="${SETUP_DIR}/cache"
@@ -52,6 +54,9 @@ sudo -u git -H git clone -q -b v${GITLAB_VERSION} --depth 1 \
 
 cd ${GITLAB_INSTALL_DIR}
 
+# remove HSTS config from the default headers, we configure it in nginx
+sed "/headers\['Strict-Transport-Security'\]/d" -i app/controllers/application_controller.rb
+
 # copy default configurations
 cp lib/support/nginx/gitlab /etc/nginx/sites-enabled/gitlab
 sudo -u git -H cp config/gitlab.yml.example config/gitlab.yml
@@ -61,9 +66,13 @@ sudo -u git -H cp config/unicorn.rb.example config/unicorn.rb
 sudo -u git -H cp config/initializers/rack_attack.rb.example config/initializers/rack_attack.rb
 sudo -u git -H cp config/initializers/smtp_settings.rb.sample config/initializers/smtp_settings.rb
 
-# create required tmp and log directories
+# symlink log -> ${GITLAB_LOG_DIR}/gitlab
+rm -rf log
+ln -sf ${GITLAB_LOG_DIR}/gitlab log
+
+# create required tmp directories
 sudo -u git -H mkdir -p tmp/pids/ tmp/sockets/
-chmod -R u+rwX log tmp
+chmod -R u+rwX tmp
 
 # create symlink to assets in tmp/cache
 rm -rf tmp/cache
@@ -76,9 +85,6 @@ sudo -u git -H ln -s ${GITLAB_DATA_DIR}/tmp/public/assets public/assets
 # create symlink to uploads directory
 rm -rf public/uploads
 sudo -u git -H ln -s ${GITLAB_DATA_DIR}/uploads public/uploads
-
-# create production log
-sudo -u git -H touch log/production.log
 
 # install gems required by gitlab, use local cache if available
 if [ -d "${GEM_CACHE_DIR}" ]; then
@@ -94,9 +100,6 @@ chown -R git:git /home/git/
 cp lib/support/init.d/gitlab /etc/init.d/gitlab
 chmod +x /etc/init.d/gitlab
 
-# install logrotate configuration
-cp lib/support/logrotate/gitlab /etc/logrotate.d/gitlab
-
 # disable default nginx configuration and enable gitlab's nginx configuration
 rm -f /etc/nginx/sites-enabled/default
 
@@ -105,9 +108,55 @@ sed 's/UsePAM yes/UsePAM no/' -i /etc/ssh/sshd_config
 sed 's/UsePrivilegeSeparation yes/UsePrivilegeSeparation no/' -i /etc/ssh/sshd_config
 echo "UseDNS no" >> /etc/ssh/sshd_config
 
+# move supervisord.log file to ${GITLAB_LOG_DIR}/supervisor/
+sed 's|^logfile=.*|logfile='"${GITLAB_LOG_DIR}"'/supervisor/supervisord.log ;|' -i /etc/supervisor/supervisord.conf
+
+# move nginx logs to ${GITLAB_LOG_DIR}/nginx
+sed 's|access_log /var/log/nginx/access.log;|access_log '"${GITLAB_LOG_DIR}"'/nginx/access.log;|' -i /etc/nginx/nginx.conf
+sed 's|error_log /var/log/nginx/error.log;|error_log '"${GITLAB_LOG_DIR}"'/nginx/error.log;|' -i /etc/nginx/nginx.conf
+
 # configure supervisord log rotation
 cat > /etc/logrotate.d/supervisord <<EOF
-/var/log/supervisor/*.log {
+${GITLAB_LOG_DIR}/supervisor/*.log {
+  weekly
+  missingok
+  rotate 52
+  compress
+  delaycompress
+  notifempty
+  copytruncate
+}
+EOF
+
+# configure gitlab log rotation
+cat > /etc/logrotate.d/gitlab <<EOF
+${GITLAB_LOG_DIR}/gitlab/*.log {
+  weekly
+  missingok
+  rotate 52
+  compress
+  delaycompress
+  notifempty
+  copytruncate
+}
+EOF
+
+# configure gitlab-shell log rotation
+cat > /etc/logrotate.d/gitlab <<EOF
+${GITLAB_LOG_DIR}/gitlab-shell/*.log {
+  weekly
+  missingok
+  rotate 52
+  compress
+  delaycompress
+  notifempty
+  copytruncate
+}
+EOF
+
+# configure gitlab vhost log rotation
+cat > /etc/logrotate.d/gitlab <<EOF
+${GITLAB_LOG_DIR}/nginx/*.log {
   weekly
   missingok
   rotate 52
@@ -129,8 +178,8 @@ user=git
 autostart=true
 autorestart=true
 stopsignal=QUIT
-stdout_logfile=/var/log/supervisor/%(program_name)s.log
-stderr_logfile=/var/log/supervisor/%(program_name)s.log
+stdout_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
+stderr_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
 EOF
 
 # configure supervisord to start sidekiq
@@ -153,8 +202,8 @@ command=bundle exec sidekiq -c {{SIDEKIQ_CONCURRENCY}}
 user=git
 autostart=true
 autorestart=true
-stdout_logfile=/var/log/supervisor/%(program_name)s.log
-stderr_logfile=/var/log/supervisor/%(program_name)s.log
+stdout_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
+stderr_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
 EOF
 
 # configure supervisor to start sshd
@@ -166,8 +215,8 @@ command=/usr/sbin/sshd -D
 user=root
 autostart=true
 autorestart=true
-stdout_logfile=/var/log/supervisor/%(program_name)s.log
-stderr_logfile=/var/log/supervisor/%(program_name)s_error.log
+stdout_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
+stderr_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
 EOF
 
 # configure supervisord to start nginx
@@ -179,8 +228,8 @@ command=/usr/sbin/nginx -g "daemon off;"
 user=root
 autostart=true
 autorestart=true
-stdout_logfile=/var/log/supervisor/%(program_name)s.log
-stderr_logfile=/var/log/supervisor/%(program_name)s.log
+stdout_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
+stderr_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
 EOF
 
 # configure supervisord to start crond
@@ -192,8 +241,8 @@ command=/usr/sbin/cron -f
 user=root
 autostart=true
 autorestart=true
-stdout_logfile=/var/log/supervisor/%(program_name)s.log
-stderr_logfile=/var/log/supervisor/%(program_name)s.log
+stdout_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
+stderr_logfile=${GITLAB_LOG_DIR}/supervisor/%(program_name)s.log
 EOF
 
 # purge build dependencies

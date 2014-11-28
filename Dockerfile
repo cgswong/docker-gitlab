@@ -1,4 +1,4 @@
-FROM sameersbn/ubuntu:14.04.20141001
+FROM sameersbn/ubuntu:14.04.20141026
 MAINTAINER sameer@damagehead.com
 
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv E1DF1F24 \
@@ -15,6 +15,8 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv E1DF1F24 \
       libgdbm3 libreadline6 libncurses5 libffi6 \
       libxml2 libxslt1.1 libcurl3 libicu52 \
  && update-locale LANG=C.UTF-8 LC_MESSAGES=POSIX \
+ && locale-gen en_US.UTF-8 \
+ && dpkg-reconfigure locales \
  && gem install --no-document bundler \
  && rm -rf /var/lib/apt/lists/* # 20140918
 
@@ -31,6 +33,7 @@ EXPOSE 80
 EXPOSE 443
 
 VOLUME ["/home/git/data"]
+VOLUME ["/var/log/gitlab"]
 
 ENTRYPOINT ["/app/init"]
 CMD ["app:start"]

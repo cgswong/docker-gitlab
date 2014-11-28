@@ -1,10 +1,12 @@
 #!/bin/bash
 set -e
 
-GITLAB_INSTALL_DIR="/home/git/gitlab"
-GITLAB_DATA_DIR="/home/git/data"
+GITLAB_HOME="/home/git"
+GITLAB_INSTALL_DIR="${GITLAB_HOME}/gitlab"
+GITLAB_DATA_DIR="${GITLAB_HOME}/data"
+GITLAB_LOG_DIR="/var/log/gitlab"
 GITLAB_BACKUP_DIR="${GITLAB_BACKUP_DIR:-$GITLAB_DATA_DIR/backups}"
-GITLAB_SHELL_INSTALL_DIR="/home/git/gitlab-shell"
+GITLAB_SHELL_INSTALL_DIR="${GITLAB_HOME}/gitlab-shell"
 
 SETUP_DIR="/app/setup"
 SYSCONF_TEMPLATES_DIR="${SETUP_DIR}/config"
@@ -17,6 +19,7 @@ GITLAB_SSH_PORT=${GITLAB_SSH_PORT:-$GITLAB_SHELL_SSH_PORT} # for backwards compa
 GITLAB_SSH_PORT=${GITLAB_SSH_PORT:-22}
 GITLAB_HTTPS=${GITLAB_HTTPS:-false}
 GITLAB_EMAIL=${GITLAB_EMAIL:-example@example.com}
+GITLAB_TIMEZONE=${GITLAB_TIMEZONE:-UTC}
 GITLAB_SIGNUP=${GITLAB_SIGNUP:-false}
 GITLAB_SIGNIN=${GITLAB_SIGNIN:-true}
 GITLAB_PROJECTS_LIMIT=${GITLAB_PROJECTS_LIMIT:-100}
@@ -32,12 +35,14 @@ SSL_SELF_SIGNED=${SSL_SELF_SIGNED:-false}
 SSL_CERTIFICATE_PATH=${SSL_CERTIFICATE_PATH:-$GITLAB_DATA_DIR/certs/gitlab.crt}
 SSL_KEY_PATH=${SSL_KEY_PATH:-$GITLAB_DATA_DIR/certs/gitlab.key}
 SSL_DHPARAM_PATH=${SSL_DHPARAM_PATH:-$GITLAB_DATA_DIR/certs/dhparam.pem}
+SSL_VERIFY_CLIENT=${SSL_VERIFY_CLIENT:-off}
 
 CA_CERTIFICATES_PATH=${CA_CERTIFICATES_PATH:-$GITLAB_DATA_DIR/certs/ca.crt}
 
 GITLAB_BACKUPS=${GITLAB_BACKUPS:-disable}
 GITLAB_BACKUP_EXPIRY=${GITLAB_BACKUP_EXPIRY:-}
 
+NGINX_WORKERS=${NGINX_WORKERS:-1}
 NGINX_MAX_UPLOAD_SIZE=${NGINX_MAX_UPLOAD_SIZE:-20m}
 GITLAB_MAX_SIZE=$(echo $NGINX_MAX_UPLOAD_SIZE |sed -e "s/^ *\([0-9]*\)[mMkKgG] *$/\1/g" )
 case "$NGINX_MAX_UPLOAD_SIZE" in
@@ -66,12 +71,14 @@ SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
 SMTP_PORT=${SMTP_PORT:-587}
 SMTP_USER=${SMTP_USER:-}
 SMTP_PASS=${SMTP_PASS:-}
+SMTP_OPENSSL_VERIFY_MODE=${SMTP_OPENSSL_VERIFY_MODE:-}
 SMTP_STARTTLS=${SMTP_STARTTLS:-true}
 if [ -n "${SMTP_USER}" ]; then
   SMTP_ENABLED=${SMTP_ENABLED:-true}
   SMTP_AUTHENTICATION=${SMTP_AUTHENTICATION:-login}
 fi
 SMTP_ENABLED=${SMTP_ENABLED:-false}
+GITLAB_EMAIL_ENABLED=${GITLAB_EMAIL_ENABLED:-$SMTP_ENABLED}
 
 LDAP_ENABLED=${LDAP_ENABLED:-false}
 LDAP_HOST=${LDAP_HOST:-}
@@ -80,6 +87,7 @@ LDAP_UID=${LDAP_UID:-sAMAccountName}
 LDAP_METHOD=${LDAP_METHOD:-ssl}
 LDAP_BIND_DN=${LDAP_BIND_DN:-}
 LDAP_PASS=${LDAP_PASS:-}
+LDAP_ACTIVE_DIRECTORY=${LDAP_ACTIVE_DIRECTORY:-true}
 LDAP_ALLOW_USERNAME_OR_EMAIL_LOGIN=${LDAP_ALLOW_USERNAME_OR_EMAIL_LOGIN:-}
 LDAP_BASE=${LDAP_BASE:-}
 LDAP_USER_FILTER=${LDAP_USER_FILTER:-}
@@ -138,6 +146,18 @@ elif [ -n "${POSTGRESQL_PORT_5432_TCP_ADDR}" ]; then
   DB_USER=${DB_USER:-${POSTGRESQL_ENV_USER}}
   DB_PASS=${DB_PASS:-${POSTGRESQL_ENV_PASS}}
   DB_NAME=${DB_NAME:-${POSTGRESQL_ENV_DB}}
+fi
+
+## Adapt uid and gid for git:git
+USERMAP_ORIG_UID=$(id -u git)
+USERMAP_ORIG_GID=$(id -g git)
+USERMAP_GID=${USERMAP_GID:-${USERMAP_UID:-$USERMAP_ORIG_GID}}
+USERMAP_UID=${USERMAP_UID:-$USERMAP_ORIG_UID}
+if [ "${USERMAP_UID}" != "${USERMAP_ORIG_UID}" ] || [ "${USERMAP_GID}" != "${USERMAP_ORIG_GID}" ]; then
+  echo "Adapting uid and gid for git:git to $USERMAP_UID:$USERMAP_GID"
+  groupmod -g "${USERMAP_GID}" git
+  sed -i -e "s/:${USERMAP_ORIG_UID}:${USERMAP_GID}:/:${USERMAP_UID}:${USERMAP_GID}:/" /etc/passwd
+  find ${GITLAB_HOME} -path ${GITLAB_DATA_DIR}/\* -prune -o -print0 | xargs -0 chown -h git:git
 fi
 
 ##
@@ -253,7 +273,7 @@ case "${GITLAB_HTTPS}" in
 esac
 
 case "${GITLAB_BACKUPS}" in
-  daily|monthly) GITLAB_BACKUP_EXPIRY=${GITLAB_BACKUP_EXPIRY:-604800} ;;
+  daily|weekly|monthly) GITLAB_BACKUP_EXPIRY=${GITLAB_BACKUP_EXPIRY:-604800} ;;
   disable|*) GITLAB_BACKUP_EXPIRY=${GITLAB_BACKUP_EXPIRY:-0} ;;
 esac
 
@@ -270,6 +290,12 @@ if [ ! -e ${GITLAB_DATA_DIR}/ssh/ssh_host_rsa_key ]; then
 fi
 # configure sshd to pick up the host keys from ${GITLAB_DATA_DIR}/ssh/
 sed -i 's,HostKey /etc/ssh/,HostKey '"${GITLAB_DATA_DIR}"'/ssh/,g' -i /etc/ssh/sshd_config
+
+# populate ${GITLAB_LOG_DIR}
+mkdir -m 0755 -p ${GITLAB_LOG_DIR}/supervisor   && chown -R root:root ${GITLAB_LOG_DIR}/supervisor
+mkdir -m 0755 -p ${GITLAB_LOG_DIR}/nginx        && chown -R git:git ${GITLAB_LOG_DIR}/nginx
+mkdir -m 0755 -p ${GITLAB_LOG_DIR}/gitlab       && chown -R git:git ${GITLAB_LOG_DIR}/gitlab
+mkdir -m 0755 -p ${GITLAB_LOG_DIR}/gitlab-shell && chown -R git:git ${GITLAB_LOG_DIR}/gitlab-shell
 
 cd ${GITLAB_INSTALL_DIR}
 
@@ -344,6 +370,9 @@ sudo -u git -H sed 's/{{GITLAB_MAX_SIZE}}/'"${GITLAB_MAX_SIZE}"'/' -i config/git
 sudo -u git -H sed 's/{{GITLAB_SSH_HOST}}/'"${GITLAB_SSH_HOST}"'/' -i config/gitlab.yml
 sudo -u git -H sed 's/{{GITLAB_SSH_PORT}}/'"${GITLAB_SSH_PORT}"'/' -i config/gitlab.yml
 
+# configure default timezone
+sudo -u git -H sed 's/{{GITLAB_TIMEZONE}}/'"${GITLAB_TIMEZONE}"'/' -i config/gitlab.yml
+
 # configure gitlab signup configuration
 sudo -u git -H sed 's/{{GITLAB_SIGNUP}}/'"${GITLAB_SIGNUP}"'/' -i config/gitlab.yml
 sudo -u git -H sed 's/{{GITLAB_SIGNIN}}/'"${GITLAB_SIGNIN}"'/' -i config/gitlab.yml
@@ -373,11 +402,11 @@ sudo -u git -H sed 's/{{GITLAB_GRAVATAR_ENABLED}}/'"${GITLAB_GRAVATAR_ENABLED}"'
 if [ "${DB_TYPE}" == "postgres" ]; then
   sudo -u git -H sed 's/{{DB_ADAPTER}}/postgresql/' -i config/database.yml
   sudo -u git -H sed 's/{{DB_ENCODING}}/unicode/' -i config/database.yml
-  sudo -u git -H sed 's/reconnect: false/#reconnect: false/' -i config/database.yml
+  sudo -u git -H sed '/reconnect: /d' -i config/database.yml
+  sudo -u git -H sed '/collation: /d' -i config/database.yml
 elif [ "${DB_TYPE}" == "mysql" ]; then
   sudo -u git -H sed 's/{{DB_ADAPTER}}/mysql2/' -i config/database.yml
   sudo -u git -H sed 's/{{DB_ENCODING}}/utf8/' -i config/database.yml
-  sudo -u git -H sed 's/#reconnect: false/reconnect: false/' -i config/database.yml
 else
   echo "Invalid database type: '$DB_TYPE'. Supported choices: [mysql, postgres]."
 fi
@@ -412,8 +441,9 @@ sudo -u git -H sed 's/{{UNICORN_WORKERS}}/'"${UNICORN_WORKERS}"'/' -i config/uni
 # configure unicorn timeout
 sudo -u git -H sed 's/{{UNICORN_TIMEOUT}}/'"${UNICORN_TIMEOUT}"'/' -i config/unicorn.rb
 
+# configure mail delivery
+sudo -u git -H sed 's/{{GITLAB_EMAIL_ENABLED}}/'"${GITLAB_EMAIL_ENABLED}"'/' -i config/gitlab.yml
 if [ "${SMTP_ENABLED}" == "true" ]; then
-  # configure mail delivery
   sudo -u git -H sed 's/{{SMTP_HOST}}/'"${SMTP_HOST}"'/' -i config/initializers/smtp_settings.rb
   sudo -u git -H sed 's/{{SMTP_PORT}}/'"${SMTP_PORT}"'/' -i config/initializers/smtp_settings.rb
 
@@ -430,6 +460,12 @@ if [ "${SMTP_ENABLED}" == "true" ]; then
   sudo -u git -H sed 's/{{SMTP_DOMAIN}}/'"${SMTP_DOMAIN}"'/' -i config/initializers/smtp_settings.rb
   sudo -u git -H sed 's/{{SMTP_STARTTLS}}/'"${SMTP_STARTTLS}"'/' -i config/initializers/smtp_settings.rb
 
+  if [ -n "${SMTP_OPENSSL_VERIFY_MODE}" ]; then
+    sudo -u git -H sed 's/{{SMTP_OPENSSL_VERIFY_MODE}}/'"${SMTP_OPENSSL_VERIFY_MODE}"'/' -i config/initializers/smtp_settings.rb
+  else
+    sudo -u git -H sed '/{{SMTP_OPENSSL_VERIFY_MODE}}/d' -i config/initializers/smtp_settings.rb
+  fi
+
   case "${SMTP_AUTHENTICATION}" in
     "") sudo -u git -H sed '/{{SMTP_AUTHENTICATION}}/d' -i config/initializers/smtp_settings.rb ;;
     *) sudo -u git -H sed 's/{{SMTP_AUTHENTICATION}}/'"${SMTP_AUTHENTICATION}"'/' -i config/initializers/smtp_settings.rb ;;
@@ -444,6 +480,7 @@ sudo -u git -H sed 's/{{LDAP_UID}}/'"${LDAP_UID}"'/' -i config/gitlab.yml
 sudo -u git -H sed 's/{{LDAP_METHOD}}/'"${LDAP_METHOD}"'/' -i config/gitlab.yml
 sudo -u git -H sed 's/{{LDAP_BIND_DN}}/'"${LDAP_BIND_DN}"'/' -i config/gitlab.yml
 sudo -u git -H sed 's/{{LDAP_PASS}}/'"${LDAP_PASS}"'/' -i config/gitlab.yml
+sudo -u git -H sed 's/{{LDAP_ACTIVE_DIRECTORY}}/'"${LDAP_ACTIVE_DIRECTORY}"'/' -i config/gitlab.yml
 sudo -u git -H sed 's/{{LDAP_ALLOW_USERNAME_OR_EMAIL_LOGIN}}/'"${LDAP_ALLOW_USERNAME_OR_EMAIL_LOGIN}"'/' -i config/gitlab.yml
 sudo -u git -H sed 's/{{LDAP_BASE}}/'"${LDAP_BASE}"'/' -i config/gitlab.yml
 sudo -u git -H sed 's/{{LDAP_USER_FILTER}}/'"${LDAP_USER_FILTER}"'/' -i config/gitlab.yml
@@ -522,6 +559,14 @@ sed 's/{{GITLAB_PORT}}/'"${GITLAB_PORT}"'/' -i /etc/nginx/sites-enabled/gitlab
 sed 's,{{SSL_CERTIFICATE_PATH}},'"${SSL_CERTIFICATE_PATH}"',' -i /etc/nginx/sites-enabled/gitlab
 sed 's,{{SSL_KEY_PATH}},'"${SSL_KEY_PATH}"',' -i /etc/nginx/sites-enabled/gitlab
 sed 's,{{SSL_DHPARAM_PATH}},'"${SSL_DHPARAM_PATH}"',' -i /etc/nginx/sites-enabled/gitlab
+sed 's/{{SSL_VERIFY_CLIENT}}/'"${SSL_VERIFY_CLIENT}"'/' -i /etc/nginx/sites-enabled/gitlab
+if [ -f /usr/local/share/ca-certificates/ca.crt ]; then
+  sed 's,{{CA_CERTIFICATES_PATH}},'"${CA_CERTIFICATES_PATH}"',' -i /etc/nginx/sites-enabled/gitlab
+else
+  sed '/{{CA_CERTIFICATES_PATH}}/d' -i /etc/nginx/sites-enabled/gitlab
+fi
+
+sed 's/worker_processes .*/worker_processes '"${NGINX_WORKERS}"';/' -i /etc/nginx/nginx.conf
 sed 's/{{NGINX_MAX_UPLOAD_SIZE}}/'"${NGINX_MAX_UPLOAD_SIZE}"'/' -i /etc/nginx/sites-enabled/gitlab
 sed 's/{{NGINX_X_FORWARDED_PROTO}}/'"${NGINX_X_FORWARDED_PROTO}"'/' -i /etc/nginx/sites-enabled/gitlab
 
@@ -589,34 +634,36 @@ appStart () {
   # for the database server to come online.
   case "${DB_TYPE}" in
     mysql)
-      prog="mysqladmin -h ${DB_HOST} -u ${DB_USER} ${DB_PASS:+-p$DB_PASS} status"
+      prog="mysqladmin -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASS:+-p$DB_PASS} status"
       ;;
     postgres)
       prog=$(find /usr/lib/postgresql/ -name pg_isready)
-      prog="${prog} -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -t 1"
+      prog="${prog} -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER} -d ${DB_NAME} -t 1"
       ;;
   esac
   timeout=60
+  printf "Waiting for database server to accept connections"
   while ! ${prog} >/dev/null 2>&1
   do
     timeout=$(expr $timeout - 1)
     if [ $timeout -eq 0 ]; then
-      echo "Could not connect to mysql server. Aborting..."
+      printf "\nCould not connect to database server. Aborting...\n"
       exit 1
     fi
-    echo "Waiting for database server to accept connections..."
+    printf "."
     sleep 1
   done
+  echo
 
   # run the `gitlab:setup` rake task if required
   case "${DB_TYPE}" in
     mysql)
       QUERY="SELECT count(*) FROM information_schema.tables WHERE table_schema = '${DB_NAME}';"
-      COUNT=$(mysql -h ${DB_HOST} -u ${DB_USER} ${DB_PASS:+-p$DB_PASS} -ss -e "${QUERY}")
+      COUNT=$(mysql -h ${DB_HOST} -P ${DB_PORT} -u ${DB_USER} ${DB_PASS:+-p$DB_PASS} -ss -e "${QUERY}")
       ;;
     postgres)
       QUERY="SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';"
-      COUNT=$(PGPASSWORD="${DB_PASS}" psql -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -Atw -c "${QUERY}" 2>/dev/null)
+      COUNT=$(PGPASSWORD="${DB_PASS}" psql -h ${DB_HOST} -p ${DB_PORT} -U ${DB_USER} -d ${DB_NAME} -Atw -c "${QUERY}" 2>/dev/null)
       ;;
   esac
   if [ -z "${COUNT}" -o ${COUNT} -eq 0 ]; then
@@ -668,6 +715,11 @@ appStart () {
 00 04 * * * cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
 EOF
       ;;
+    weekly)
+      sudo -u git -H cat > /tmp/cron.git <<EOF
+00 04 * * 0 cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
+EOF
+      ;;
     monthly)
       sudo -u git -H cat > /tmp/cron.git <<EOF
 00 04 01 * * cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
@@ -684,8 +736,8 @@ EOF
 appSanitize () {
   echo "Checking repository directories permissions..."
   chmod -R ug+rwX,o-rwx ${GITLAB_DATA_DIR}/repositories/
-  sudo -u git -H chmod -R ug-s ${GITLAB_DATA_DIR}/repositories/
-  find ${GITLAB_DATA_DIR}/repositories/ -type d -print0 | xargs -0 sudo -u git -H chmod g+s
+  chmod -R ug-s ${GITLAB_DATA_DIR}/repositories/
+  find ${GITLAB_DATA_DIR}/repositories/ -type d -print0 | xargs -0 chmod g+s
   chown -R git:git ${GITLAB_DATA_DIR}/repositories
 
   echo "Checking satellites directories permissions..."

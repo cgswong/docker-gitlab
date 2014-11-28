@@ -1,20 +1,16 @@
 postgresql:
-  image: orchardup/postgresql:latest
+  image: sameersbn/postgresql:9.1-1
   environment:
-    - POSTGRESQL_USER=gitlab
-    - POSTGRESQL_PASS=airoaroonipouvua
-    - POSTGRESQL_DB=gitlabhq_production
+    - DB_USER=gitlab
+    - DB_PASS=secretpassword
+    - DB_NAME=gitlabhq_production
 gitlab:
-  image: sameersbn/gitlab:latest
+  image: sameersbn/gitlab:7.5.1
   links:
    - redis:redisio
    - postgresql:postgresql
   ports:
-   - "80"
-   - "22"
-  environment:
-    - DB_USER=gitlab
-    - DB_PASS=airoaroonipouvua
-    - DB_NAME=gitlabhq_production
+   - "10080:80"
+   - "10022:22"
 redis:
-  image: redis:2.8.9
+  image: sameersbn/redis:latest

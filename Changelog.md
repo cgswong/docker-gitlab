@@ -1,6 +1,28 @@
 # Changelog
 
-**latest**
+**7.5.1**
+- gitlab: upgrade to CE v.7.5.1
+- gitlab-shell to v2.2.0
+- added `GITLAB_TIMEZONE` configuration option
+- added `GITLAB_EMAIL_ENABLED` configuration option
+
+**7.4.4**
+- gitlab: upgrade to CE v.7.4.4
+- added `SSL_VERIFY_CLIENT` configuration option
+- added `NGINX_WORKERS` configuration option
+- added `USERMAP_UID` and `USERMAP_GID` configuration option
+
+**7.4.3**
+- gitlab: upgrade to CE v.7.4.3
+
+**7.4.2**
+- gitlab: upgrade to CE v.7.4.2
+
+**7.4.0**
+- gitlab: upgrade to CE v.7.4.0
+- config: added `LDAP_ACTIVE_DIRECTORY` configuration option
+- added SMTP_OPENSSL_VERIFY_MODE configuration option
+- feature: gitlab logs volume
 - automatically compile assets if relative_url is changed
 - launch all daemons via supervisord
 
