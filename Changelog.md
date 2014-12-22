@@ -1,5 +1,13 @@
 # Changelog
 
+**7.5.3**
+- accept `BACKUP` parameter while running the restore rake task, closes #220
+- init: do not run `gitlab:satellites:create` rake task at startup
+- gitlab: upgrade to CE v.7.5.3
+
+**7.5.2**
+- gitlab: upgrade to CE v.7.5.2
+
 **7.5.1**
 - gitlab: upgrade to CE v.7.5.1
 - gitlab-shell to v2.2.0
