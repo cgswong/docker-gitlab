@@ -1,5 +1,21 @@
 # Changelog
 
+**latest**
+- init: added GOOGLE_ANALYTICS_ID configuration option
+
+**7.6.2**
+- gitlab: upgrade to CE v.7.6.2
+
+**7.6.1**
+- disable nginx ipv6 if host does not support it.
+- init: added GITLAB_BACKUP_TIME configuration option
+- gitlab: upgrade to CE v.7.6.1
+
+**7.6.0**
+- add support for configuring piwik
+- gitlab-shell: upgrade to v.2.4.0
+- gitlab: upgrade to CE v.7.6.0
+
 **7.5.3**
 - accept `BACKUP` parameter while running the restore rake task, closes #220
 - init: do not run `gitlab:satellites:create` rake task at startup

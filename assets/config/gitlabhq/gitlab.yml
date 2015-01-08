@@ -35,7 +35,7 @@ production: &base
 
     ## Date & Time settings
     # Uncomment and customize if you want to change the default time zone of GitLab application.
-    # To see all available zones, run `bundle exec rake time:zones:all`
+    # To see all available zones, run `bundle exec rake time:zones:all RAILS_ENV=production`
     time_zone: "{{GITLAB_TIMEZONE}}"
 
     ## Email settings
@@ -287,7 +287,7 @@ production: &base
 
   extra:
     ## Google analytics. Uncomment if you want it
-    # google_analytics_id: '_your_tracking_id'
+    google_analytics_id: '{{GOOGLE_ANALYTICS_ID}}'
 
     ## Piwik analytics.
     piwik_url: '{{PIWIK_URL}}'

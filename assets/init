@@ -40,6 +40,7 @@ SSL_VERIFY_CLIENT=${SSL_VERIFY_CLIENT:-off}
 CA_CERTIFICATES_PATH=${CA_CERTIFICATES_PATH:-$GITLAB_DATA_DIR/certs/ca.crt}
 
 GITLAB_BACKUPS=${GITLAB_BACKUPS:-disable}
+GITLAB_BACKUP_TIME=${GITLAB_BACKUP_TIME:-04:00}
 GITLAB_BACKUP_EXPIRY=${GITLAB_BACKUP_EXPIRY:-}
 
 NGINX_WORKERS=${NGINX_WORKERS:-1}
@@ -109,6 +110,8 @@ OAUTH_TWITTER_APP_SECRET=${OAUTH_TWITTER_APP_SECRET:-}
 
 OAUTH_GITHUB_API_KEY=${OAUTH_GITHUB_API_KEY:-}
 OAUTH_GITHUB_APP_SECRET=${OAUTH_GITHUB_APP_SECRET:-}
+
+GOOGLE_ANALYTICS_ID=${GOOGLE_ANALYTICS_ID:-}
 
 PIWIK_URL=${PIWIK_URL:-}
 PIWIK_SITE_ID=${PIWIK_SITE_ID:-}
@@ -550,6 +553,13 @@ else
   sudo -u git -H sed '/{{OAUTH_GITHUB_SCOPE}}/d' -i config/gitlab.yml
 fi
 
+# google analytics
+if [ -n "${GOOGLE_ANALYTICS_ID}" ]; then
+  sudo -u git -H sed 's/{{GOOGLE_ANALYTICS_ID}}/'"${GOOGLE_ANALYTICS_ID}"'/' -i config/gitlab.yml
+else
+  sudo -u git -H sed '/{{GOOGLE_ANALYTICS_ID}}/d' -i config/gitlab.yml
+fi
+
 # piwik
 if [ -n "${PIWIK_URL}" -a -n "${PIWIK_SITE_ID}" ]; then
   sudo -u git -H sed 's,{{PIWIK_URL}},'"${PIWIK_URL}"',' -i config/gitlab.yml
@@ -601,6 +611,12 @@ else
   sed 's,{{GITLAB_RELATIVE_URL_ROOT}},/,' -i /etc/nginx/sites-enabled/gitlab
   sed 's,{{GITLAB_RELATIVE_URL_ROOT__with_trailing_slash}},/,' -i /etc/nginx/sites-enabled/gitlab
   sudo -u git -H sed '/{{GITLAB_RELATIVE_URL_ROOT}}/d' -i config/unicorn.rb
+fi
+
+# disable ipv6 support
+if [ ! -f /proc/net/if_inet6 ]; then
+  sed -e '/listen \[::\]:80/ s/^#*/#/' -i /etc/nginx/sites-enabled/gitlab
+  sed -e '/listen \[::\]:443/ s/^#*/#/' -i /etc/nginx/sites-enabled/gitlab
 fi
 
 # fix permission and ownership of ${GITLAB_DATA_DIR}
@@ -717,20 +733,21 @@ appStart () {
   rm -rf tmp/sockets/gitlab.socket
 
   # setup cron job for automatic backups
+  read hour min <<< ${GITLAB_BACKUP_TIME//[:]/ }
   case "${GITLAB_BACKUPS}" in
     daily)
       sudo -u git -H cat > /tmp/cron.git <<EOF
-00 04 * * * cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
+$min $hour * * * cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
 EOF
       ;;
     weekly)
       sudo -u git -H cat > /tmp/cron.git <<EOF
-00 04 * * 0 cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
+$min $hour * * 0 cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
 EOF
       ;;
     monthly)
       sudo -u git -H cat > /tmp/cron.git <<EOF
-00 04 01 * * cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
+$min $hour 01 * * cd ${GITLAB_INSTALL_DIR} && PATH=/usr/local/bin:/usr/bin:/bin bundle exec rake gitlab:backup:create RAILS_ENV=production
 EOF
       ;;
   esac
