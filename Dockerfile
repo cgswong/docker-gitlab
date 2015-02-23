@@ -1,4 +1,4 @@
-FROM sameersbn/ubuntu:14.04.20141218
+FROM sameersbn/ubuntu:14.04.20150220
 MAINTAINER sameer@damagehead.com
 
 RUN apt-key adv --keyserver keyserver.ubuntu.com --recv E1DF1F24 \
@@ -7,6 +7,8 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv E1DF1F24 \
  && echo "deb http://ppa.launchpad.net/brightbox/ruby-ng/ubuntu trusty main" >> /etc/apt/sources.list \
  && apt-key adv --keyserver keyserver.ubuntu.com --recv C300EE8C \
  && echo "deb http://ppa.launchpad.net/nginx/stable/ubuntu trusty main" >> /etc/apt/sources.list \
+ && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
+ && echo 'deb http://apt.postgresql.org/pub/repos/apt/ trusty-pgdg main' > /etc/apt/sources.list.d/pgdg.list \
  && apt-get update \
  && apt-get install -y supervisor logrotate locales \
       nginx openssh-server mysql-client postgresql-client redis-tools \
@@ -18,7 +20,7 @@ RUN apt-key adv --keyserver keyserver.ubuntu.com --recv E1DF1F24 \
  && locale-gen en_US.UTF-8 \
  && dpkg-reconfigure locales \
  && gem install --no-document bundler \
- && rm -rf /var/lib/apt/lists/* # 20140918
+ && rm -rf /var/lib/apt/lists/* # 20150220
 
 COPY assets/setup/ /app/setup/
 RUN chmod 755 /app/setup/install

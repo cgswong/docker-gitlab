@@ -1,9 +1,30 @@
 # Changelog
 
-**latest**
+**7.8.0**
+- update postgresql client to the latest version, Closes #249
+- removed `GITLAB_SIGNUP` configuration option, can be set from gitlab ui
+- removed `GITLAB_SIGNIN` configuration option, can be set from gitlab ui
+- removed `GITLAB_PROJECTS_LIMIT` configuration option, can be set from gitlab ui
+- removed `GITLAB_GRAVATAR_ENABLED` configuration option, can be set from gitlab ui
+- gitlab-shell: upgrade to v.2.5.3
+- gitlab: upgrade to CE v.7.8.0
+- init: set `LDAP_PORT` default value to `389`
+- init: set `LDAP_METHOD` default value to `plain`
+- init: added gitlab oauth configuration support
+
+**7.7.2**
+- gitlab-shell: upgrade to v.2.4.2
+- gitlab: upgrade to CE v.7.7.2
+
+**7.7.1**
+- gitlab: upgrade to CE v.7.7.1
+
+**7.7.0**
 - init: added GOOGLE_ANALYTICS_ID configuration option
 - added support for mantis issue tracker
 - fixed log rotation configuration
+- gitlab-shell: upgrade to v.2.4.1
+- gitlab: upgrade to CE v.7.7.0
 
 **7.6.2**
 - gitlab: upgrade to CE v.7.6.2
